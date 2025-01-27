@@ -4,7 +4,7 @@ version = "0.1.0"
 description = ""
 authors = ["Philipp Walter <philipp-walter@web.de>"]
 readme = "README.md"
-packages = [{include = "ac_next_lvl_py_challenge"}]
+packages = [{include = "app", from = "src"}]
 
 [tool.poetry.dependencies]
 python = "^3.12"
@@ -20,7 +20,12 @@ pandas = "^2.2.3"
 python-dotenv = "^1.0.1"
 pytest = "^8.3.4"
 pytest-asyncio = "^0.25.0"
+pytest-cov = "^6.0.0"
+types-requests = "^2.32.0.20241016"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+addopts = "--cov=src --cov-report=term-missing"
