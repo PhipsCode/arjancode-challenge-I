@@ -1,6 +1,5 @@
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
-from functools import partial
 from typing import Any, Literal, Protocol, Type, TypeVar
 from pydantic import BaseModel
 import requests
@@ -104,9 +103,8 @@ def create_crypto_request_params(
     return {"function": function, "symbol": symbol, "market": market}
 
 
-class APIParams(Protocol):
-
-    def as_dict(self) -> dict[str, str]: ...
+def create_symbol_search_params(keywords: str) -> dict[str, str]:
+    return {"function": TICKER_SEARCH_FUNCTION, "keywords": keywords}
 
 
 RESPONSE_ERROR_MESSAGE_KEY = "Error Message"
@@ -121,61 +119,13 @@ class MarkedDataParams:
         return asdict(self)
 
 
-def request_history_data(api_params: APIParams, api_key: str) -> AssetHistoryData:
-    params = api_params.as_dict()
-    params["apikey"] = api_key
-
-    if get_api_count().remaining <= 0:
-        raise APIMessageError("API Limit reached. Please try again next day.")
-
-    try:
-        response = requests.get(BASE_URL, params=params)
-    except requests.RequestException as e:
-        raise UncaughtAPIError(f"Request failed: {e}")
-    increment_api_count()
-
-    if response.status_code != 200:
-        response.raise_for_status()
-        raise UncaughtAPIError(
-            f"Request failed with status code {response.status_code}: {response.text}"
-        )
-
-    data: dict[str, Any] = response.json()
-
-    if RESPONSE_ERROR_MESSAGE_KEY in data:
-        raise APIMessageError(data[RESPONSE_ERROR_MESSAGE_KEY])
-
-    return AssetHistoryData(**data)
-
-
-def request_symbol_search(keywords: str, api_key: str) -> SymbolMarketSearchResults:
-    params = {
-        "function": TICKER_SEARCH_FUNCTION,
-        "keywords": keywords,
-        "apikey": api_key,
-    }
-
-    try:
-        response = requests.get(BASE_URL, params=params)
-    except requests.RequestException as e:
-        raise UncaughtAPIError(f"Request failed: {e}")
-    increment_api_count()
-    data: dict[str, Any] = response.json()
-
-    if RESPONSE_ERROR_MESSAGE_KEY in data:
-        raise APIMessageError(data[RESPONSE_ERROR_MESSAGE_KEY])
-
-    return SymbolMarketSearchResults(**data)
-
-
 T = TypeVar("T", bound=BaseModel)
 
 
+# def request_data[T](api_params: APIParams, expected_output: type[T], api_key: str) -> T:
 def request_data(
     api_params: dict[str, str], api_key: str, expected_output: Type[T]
 ) -> T:
-    # def request_data(api_params: APIParams, api_key: str, expected_output: Type[T]) -> T:
-    # def request_data[T](api_params: APIParams, expected_output: type[T], api_key: str) -> T:
     params = api_params.copy()
     params["apikey"] = api_key
 
@@ -200,9 +150,3 @@ def request_data(
         raise APIMessageError(data[RESPONSE_ERROR_MESSAGE_KEY])
 
     return expected_output(**data)
-
-
-# request_history_data = partial(request_data, expected_output=AssetHistoryData)
-# request_market_meda_data = partial(
-#     request_data, expected_output=SymbolMarketSearchResults
-# )
