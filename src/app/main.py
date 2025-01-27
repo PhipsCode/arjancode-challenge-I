@@ -1,10 +1,11 @@
+from datetime import datetime
 import dash
 from dash import dcc, html, Input, Output, State
 import pandas as pd
 from dash import dash_table
+import plotly.graph_objects as go
 
-
-from app.alpha_vantage_api.operations import (
+from alpha_vantage_api.operations import (
     AssetType,
     Interval,
     create_crypto_request_params,
@@ -14,9 +15,11 @@ from app.alpha_vantage_api.operations import (
     request_data,
 )
 from alpha_vantage_api.models import (
+    MetaData,
     SymbolMarketSearchResults,
     AssetHistoryData,
     MarketMetaData,
+    TimeSeriesData,
 )
 from alpha_vantage_api.config import API_KEY
 from alpha_vantage_api.limit_count import get_api_count
@@ -34,12 +37,17 @@ INPUT_FIELD_2_LABEL = "input-field-2-label"
 INTERVAL_DROPDOWN = "interval-dropdown"
 DAILY_OUTPUTSIZE_DROPDOWN = "daily-outputsize-dropdown"
 
-FETCH_DATA_BUTTON = "fetch-data-button"
+GET_TIMEDATA_BUTTON = "get-timedata-button"
+TIME_DATA_STORE = "time-data-store"
 
 # right column
 SEARCH_INPUT_FIELD = "search-input-field"
 SEARCH_BUTTON = "search-button"
 SEARCH_RESULT_TABLE = "search-result-table"
+SEARCH_RESULT_STORE = "search-result-store"
+
+# graph area
+TIME_DATA_GRAPH = "graph"
 
 # below display area
 API_COUNT_STORE = "api-count-store"
@@ -62,12 +70,27 @@ from dash import html, dcc
 
 app = dash.Dash(__name__)
 
+# Beispiel-Daten
+example_data = AssetHistoryData(
+    meta_data=MetaData(
+        information="test information",
+        asset="test asset",
+        currency="test currency",
+        timezone="test timezone",
+    ),
+    time_series={
+        datetime(2025, 1, 25): TimeSeriesData(open=100, high=110, low=90, close=105),
+        datetime(2025, 1, 26): TimeSeriesData(open=105, high=115, low=95, close=110),
+        datetime(2025, 1, 27): TimeSeriesData(open=110, high=120, low=100, close=115),
+    },
+)
 
 app.layout = html.Div(
     [
+        dcc.Store(id=API_COUNT_STORE, data=get_api_count().remaining),
+        dcc.Store(id=TIME_DATA_STORE),
         html.Div(
             children=[
-                dcc.Store(id=API_COUNT_STORE, data=get_api_count().remaining),
                 html.Div(
                     children=[
                         html.H1("Alpha Vantage Time Data Request"),
@@ -119,7 +142,9 @@ app.layout = html.Div(
                             ],
                             value=Interval.DAILY,  # default value
                         ),
-                        html.Button("Daten abrufen", id=FETCH_DATA_BUTTON, n_clicks=0),
+                        html.Button(
+                            "Daten abrufen", id=GET_TIMEDATA_BUTTON, n_clicks=0
+                        ),
                     ],
                     style={
                         "flex": 1,
@@ -161,7 +186,9 @@ app.layout = html.Div(
         html.Div(
             children=[
                 html.Div(
-                    children=[],
+                    children=[
+                        dcc.Graph(id=TIME_DATA_GRAPH),
+                    ],
                     style={
                         "padding": "20px",
                         "border": "1px solid #ccc",
@@ -285,8 +312,9 @@ def update_fields(config: AssetType):
     [
         Output(DEBUG_OUTPUT_TEXT_FIELD, "value", allow_duplicate=True),
         Output(API_COUNT_STORE, "data", allow_duplicate=True),
+        Output(TIME_DATA_STORE, "data"),
     ],
-    [Input(FETCH_DATA_BUTTON, "n_clicks")],
+    [Input(GET_TIMEDATA_BUTTON, "n_clicks")],
     [
         State(ASSET_TYPE_DROPDOWN, "value"),
         State(INTERVAL_DROPDOWN, "value"),
@@ -318,10 +346,57 @@ def fetch_data(n_clicks, asset_type, interval, input_field_1, input_field_2):
 
     try:
         requested_data = request_data(api_params, API_KEY, AssetHistoryData)
-        return_value = f"{requested_data}"
+        return_string = f"{requested_data}"
+        return_json = requested_data.model_dump_json()
     except Exception as e:
-        return_value = f"Error: {e}"
-    return return_value, get_api_count().remaining
+        return_string = f"Error: {e}"
+        return_json = ""
+
+    return return_string, get_api_count().remaining, return_json
+
+
+# endregion
+
+# region: graph area
+
+
+@app.callback(
+    Output(TIME_DATA_GRAPH, "figure"),
+    Input(TIME_DATA_STORE, "data"),
+)
+def update_graph(data):
+    if not data:
+        return dash.no_update
+
+    asset_data = AssetHistoryData.model_validate_json(data)
+
+    df = {
+        "time": list(asset_data.time_series.keys()),
+        "close": [ts_data.close for ts_data in asset_data.time_series.values()],
+    }
+
+    print(df)
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatter(
+            x=df["time"],
+            y=df["close"],
+            mode="lines+markers",
+            name="Close",
+            line=dict(color="blue"),
+        )
+    )
+
+    fig.update_layout(
+        title="Time Series Data",
+        xaxis_title="Time",
+        yaxis_title="Price",
+        template="plotly_white",
+    )
+
+    return fig
 
 
 # endregion
