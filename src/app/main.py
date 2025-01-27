@@ -70,20 +70,6 @@ from dash import html, dcc
 
 app = dash.Dash(__name__)
 
-# Beispiel-Daten
-example_data = AssetHistoryData(
-    meta_data=MetaData(
-        information="test information",
-        asset="test asset",
-        currency="test currency",
-        timezone="test timezone",
-    ),
-    time_series={
-        datetime(2025, 1, 25): TimeSeriesData(open=100, high=110, low=90, close=105),
-        datetime(2025, 1, 26): TimeSeriesData(open=105, high=115, low=95, close=110),
-        datetime(2025, 1, 27): TimeSeriesData(open=110, high=120, low=100, close=115),
-    },
-)
 
 app.layout = html.Div(
     [
