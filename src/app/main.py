@@ -1,10 +1,9 @@
-from datetime import datetime
 import dash
 from dash import dcc, html, Input, Output, State
 import pandas as pd
 from dash import dash_table
 import plotly.graph_objects as go
-
+from sqlalchemy.orm import Session
 from alpha_vantage_api.operations import (
     AssetType,
     Interval,
@@ -15,14 +14,18 @@ from alpha_vantage_api.operations import (
     request_data,
 )
 from alpha_vantage_api.models import (
-    MetaData,
     SymbolMarketSearchResults,
     AssetHistoryData,
     MarketMetaData,
-    TimeSeriesData,
 )
 from alpha_vantage_api.config import API_KEY
 from alpha_vantage_api.limit_count import get_api_count
+from db.av_search.engine import alpha_vantage_db
+from db.av_search.operations import (
+    save_search_results,
+    get_search_results,
+)
+
 
 assert API_KEY is not None, "API_KEY is not set"
 
@@ -45,6 +48,7 @@ SEARCH_INPUT_FIELD = "search-input-field"
 SEARCH_BUTTON = "search-button"
 SEARCH_RESULT_TABLE = "search-result-table"
 SEARCH_RESULT_STORE = "search-result-store"
+
 
 # graph area
 TIME_DATA_GRAPH = "graph"
@@ -75,18 +79,42 @@ app.layout = html.Div(
     [
         dcc.Store(id=API_COUNT_STORE, data=get_api_count().remaining),
         dcc.Store(id=TIME_DATA_STORE),
+        # upper display area with two columns
         html.Div(
             children=[
+                # left column
                 html.Div(
                     children=[
-                        html.H1("Alpha Vantage Time Data Request"),
-                        dcc.Dropdown(
-                            id=ASSET_TYPE_DROPDOWN,
-                            options=[
-                                {"label": asset.name, "value": asset.value}
-                                for asset in AssetType
+                        html.H2("Alpha Vantage Time Data Request"),
+                        html.Div(
+                            children=[
+                                dcc.Dropdown(
+                                    id=ASSET_TYPE_DROPDOWN,
+                                    options=[
+                                        {"label": asset.name, "value": asset.value}
+                                        for asset in AssetType
+                                    ],
+                                    value=AssetType.FOREX,  # default value
+                                    style={"width": "100%"},
+                                ),
+                                dcc.Dropdown(
+                                    id=INTERVAL_DROPDOWN,
+                                    options=[
+                                        {
+                                            "label": interval.name,
+                                            "value": interval.value,
+                                        }
+                                        for interval in Interval
+                                    ],
+                                    value=Interval.DAILY,  # default value
+                                    style={"width": "100%"},
+                                ),
                             ],
-                            value=AssetType.FOREX,  # default value
+                            style={
+                                "display": "flex",
+                                "justify-content": "space-between",
+                                "space-between": "100%",
+                            },
                         ),
                         html.Div(
                             id="input-fields-container",
@@ -120,27 +148,20 @@ app.layout = html.Div(
                                 ]
                             ],
                         ),
-                        dcc.Dropdown(
-                            id=INTERVAL_DROPDOWN,
-                            options=[
-                                {"label": interval.name, "value": interval.value}
-                                for interval in Interval
-                            ],
-                            value=Interval.DAILY,  # default value
-                        ),
                         html.Button(
                             "Daten abrufen", id=GET_TIMEDATA_BUTTON, n_clicks=0
                         ),
                     ],
                     style={
                         "flex": 1,
-                        "padding": "20px",
+                        "padding": "10px",
                         "border": "1px solid #ccc",
                     },
                 ),
+                # right column
                 html.Div(
                     children=[
-                        html.H1("Alpha Vantage Symbol Marked Search"),
+                        html.H2("Alpha Vantage Symbol Marked Search"),
                         dcc.Input(
                             id=SEARCH_INPUT_FIELD,
                             type="text",
@@ -153,12 +174,13 @@ app.layout = html.Div(
                                 {"name": field_name, "id": field_name}
                                 for field_name in MarketMetaData.model_fields.keys()
                             ],
-                            style_table={"marginTop": "20px", "overflowX": "auto"},
+                            style_table={"marginTop": "10px", "overflowX": "auto"},
+                            row_selectable="single",
                         ),
                     ],
                     style={
                         "flex": 1,
-                        "padding": "20px",
+                        "padding": "10px",
                         "border": "1px solid #ccc",
                     },
                 ),
@@ -166,21 +188,54 @@ app.layout = html.Div(
             style={
                 "display": "flex",
                 "justify-content": "space-between",
-                "marginBottom": "20px",
+                "marginBottom": "10px",
             },
         ),
+        # middle display area with graph
+        html.Div(
+            children=[
+                dcc.Graph(id=TIME_DATA_GRAPH),
+            ],
+            style={
+                "padding": "10px",
+                "border": "1px solid #ccc",
+                "width": "100%",
+            },
+        ),
+        # lower display area with two columns
         html.Div(
             children=[
                 html.Div(
                     children=[
-                        dcc.Graph(id=TIME_DATA_GRAPH),
+                        dcc.Input(
+                            id="new-input-field",
+                            type="text",
+                            placeholder="Enter new input",
+                            style={"margin-right": "10px"},
+                        ),
+                        html.Button(
+                            "Submit",
+                            id="new-submit-button",
+                            n_clicks=0,
+                        ),
                     ],
                     style={
-                        "padding": "20px",
+                        "flex": 1,
+                        "padding": "10px",
                         "border": "1px solid #ccc",
-                        "width": "100%",
                     },
+                    # # graph
+                    # html.Div(
+                    #     children=[
+                    #         dcc.Graph(id=TIME_DATA_GRAPH),
+                    #     ],
+                    #     style={
+                    #         "padding": "20px",
+                    #         "border": "1px solid #ccc",
+                    #         "width": "100%",
+                    #     },
                 ),
+                # lower display area -> will be changed to a detailed interface to save the data in the database
                 html.Div(
                     children=[
                         html.Div(
@@ -208,19 +263,29 @@ app.layout = html.Div(
                             placeholder="raw data output",
                         ),
                     ],
+                    # style={
+                    #     "display": "flex",
+                    #     "align-items": "center",
+                    #     "padding": "10px",
+                    #     "border": "1px solid #ccc",
+                    # },
                     style={
-                        "display": "flex",
-                        "align-items": "center",
+                        "flex": 1,
                         "padding": "10px",
                         "border": "1px solid #ccc",
                     },
                 ),
             ],
+            # style={
+            #     "width": "100%",
+            #     "display": "flex",
+            #     "flexDirection": "column",
+            #     "marginTop": "20px",
+            # },
             style={
-                "width": "100%",
                 "display": "flex",
-                "flexDirection": "column",
-                "marginTop": "20px",
+                "justify-content": "space-between",
+                "marginBottom": "10px",
             },
         ),
     ]
@@ -232,6 +297,7 @@ app.layout = html.Div(
     [
         Output(SEARCH_RESULT_TABLE, "data"),
         Output(API_COUNT_STORE, "data", allow_duplicate=True),
+        Output(DEBUG_OUTPUT_TEXT_FIELD, "value", allow_duplicate=True),
     ],
     [Input(SEARCH_BUTTON, "n_clicks")],
     [State(SEARCH_INPUT_FIELD, "value")],
@@ -242,15 +308,44 @@ def search_marked_symbols(n_clicks, search_term: str):
     if not n_clicks:
         return dash.no_update
 
-    search_results = request_data(
-        create_symbol_search_params(search_term), API_KEY, SymbolMarketSearchResults
-    )
-    df = pd.DataFrame(
-        best_match.model_dump() for best_match in search_results.best_matches
-    )
+    # this could be replaced by having the db as a fast api endpoint running in the background
+    with alpha_vantage_db() as db:
+        search_results = [
+            MarketMetaData(**result) for result in get_search_results(db, search_term)
+        ]
+        debug_info = "from db"
+
+    if search_results == []:
+        search_results = request_data(
+            create_symbol_search_params(search_term), API_KEY, SymbolMarketSearchResults
+        ).best_matches
+        with alpha_vantage_db() as db:
+            save_search_results(db, search_term, search_results)
+        debug_info = "from api"
+
+    df = pd.DataFrame(best_match.model_dump() for best_match in search_results)
     print(df)
     return_values = df.to_dict("records")
-    return return_values, get_api_count().remaining
+    return (return_values, get_api_count().remaining, debug_info)
+
+
+@app.callback(
+    Output(DEBUG_OUTPUT_TEXT_FIELD, "value", allow_duplicate=True),
+    Output(ASSET_TYPE_DROPDOWN, "value"),
+    Output(INPUT_FIELD_1, "value"),
+    [Input(SEARCH_RESULT_TABLE, "selected_rows"), Input(SEARCH_RESULT_TABLE, "data")],
+    prevent_initial_call=True,
+)
+def select_marked_search(selected_rows, data):
+    if not selected_rows:
+        return dash.no_update
+    selected_row_data = data[selected_rows[0]]
+
+    return (
+        f"Selected row: {selected_row_data}",
+        AssetType.STOCK,
+        selected_row_data["symbol"],  # TODO: Hardcoded dependency to creation of table!
+    )
 
 
 # endregion

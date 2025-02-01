@@ -77,8 +77,8 @@ class AssetHistoryData(BaseModel):
 
 class MarketMetaData(BaseModel):
     name: str = Field(validation_alias=AliasChoices("name", "2. name"))
-    identifier: str = Field(validation_alias=AliasChoices("identifier", "1. symbol"))
-    type: str = Field(validation_alias=AliasChoices("type", "3. type"))
+    symbol: str = Field(validation_alias=AliasChoices("symbol", "1. symbol"))
+    asset_type: str = Field(validation_alias=AliasChoices("asset_type", "3. type"))
     currency: str = Field(validation_alias=AliasChoices("currency", "8. currency"))
 
 
