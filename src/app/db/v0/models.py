@@ -1,7 +1,6 @@
 from typing import Any
 from sqlalchemy import (
     ForeignKey,
-    Table,
     Column,
     Integer,
     String,
@@ -122,3 +121,21 @@ class TimeSeriesEntity(Base):
 #     id = Column(Integer, primary_key=True)
 #     name = Column(String, unique=True, nullable=False)
 #     symbols = relationship("SymbolCurrencyEntity", back_populates="exchange")
+
+
+class SearchEntryEntity(Base):
+    __tablename__ = "search_entries"
+
+    id = Column(Integer, primary_key=True)
+    input = Column(String, nullable=False)
+
+
+class SearchResultEntity(Base):
+    __tablename__ = "search_results"
+
+    id = Column(Integer, primary_key=True)
+    search_entry_id = Column(Integer, ForeignKey("search_entries.id"), nullable=False)
+    name = Column(String, nullable=False)
+    symbol = Column(String, nullable=False)
+    asset_type = Column(String, nullable=False)
+    currency = Column(String, nullable=False)
