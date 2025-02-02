@@ -1,4 +1,3 @@
-from typing import Any
 from sqlalchemy import (
     ForeignKey,
     Column,
@@ -7,17 +6,7 @@ from sqlalchemy import (
     Table,
 )
 from sqlalchemy.orm import relationship
-from sqlalchemy.orm import DeclarativeBase
-
-
-class Base(DeclarativeBase):
-    pass
-
-
-def to_dict(model: Base) -> dict[str, Any]:
-    return {
-        column.name: getattr(model, column.name) for column in model.__table__.columns
-    }
+from ..base import Base
 
 
 class SearchEntryEntity(Base):

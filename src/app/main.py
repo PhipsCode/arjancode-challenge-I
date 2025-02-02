@@ -3,7 +3,6 @@ from dash import dcc, html, Input, Output, State
 import pandas as pd
 from dash import dash_table
 import plotly.graph_objects as go
-from sqlalchemy.orm import Session
 from alpha_vantage_api.operations import (
     AssetType,
     Interval,
@@ -20,7 +19,7 @@ from alpha_vantage_api.models import (
 )
 from alpha_vantage_api.config import API_KEY
 from alpha_vantage_api.limit_count import get_api_count
-from db.av_search.engine import alpha_vantage_db
+from db.engine_av_search import alpha_vantage_db
 from db.av_search.operations import (
     save_search_results,
     get_search_results,

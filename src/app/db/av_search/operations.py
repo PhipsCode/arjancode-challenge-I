@@ -4,8 +4,8 @@ from .models import (
     SearchEntryEntity,
     SearchResultEntity,
     search_entry_result_association,
-    to_dict,
 )
+from ..base import to_dict
 
 
 class ResultsSpec(Protocol):
