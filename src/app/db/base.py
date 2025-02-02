@@ -11,7 +11,7 @@ class Base(DeclarativeBase):
     #     }
 
 
-# why not use this function instead of the method to_dict?!
+# why not use this as method of Base? (first experiance, )
 def to_dict(model: Base) -> dict[str, Any]:
     return {
         column.name: getattr(model, column.name) for column in model.__table__.columns

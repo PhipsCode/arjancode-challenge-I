@@ -19,7 +19,9 @@ from alpha_vantage_api.models import (
 )
 from alpha_vantage_api.config import API_KEY
 from alpha_vantage_api.limit_count import get_api_count
-from db.engine_av_search import alpha_vantage_db
+
+# from db.engine_av_search import alpha_vantage_db
+from db.engine import get_db_session_context, AV_SEARCH_DB
 from db.av_search.operations import (
     save_search_results,
     get_search_results,
@@ -56,7 +58,9 @@ TIME_DATA_GRAPH = "graph"
 API_COUNT_STORE = "api-count-store"
 OUTPUT_REMAINING_API_CALLS = "api-calls-remaining"
 DEBUG_OUTPUT_TEXT_FIELD = "debug-output-text-field"
-UPDATE_DB_BUTTON = "update-db-button"
+
+WRITE_TO_DB_BUTTON = "write-to-db-button"
+WRITE_TO_DB_INPUT = "write-to-db-input"
 # def load_example_df() -> pd.DataFrame:
 #     example = Path(r"alpha_vantage_examples\meta_data_search\TSLA_search_result.json")
 
@@ -207,14 +211,14 @@ app.layout = html.Div(
                 html.Div(
                     children=[
                         dcc.Input(
-                            id="new-input-field",
+                            id=WRITE_TO_DB_INPUT,
                             type="text",
-                            placeholder="Enter new input",
+                            placeholder="add ISIN for db",
                             style={"margin-right": "10px"},
                         ),
                         html.Button(
-                            "Submit",
-                            id="new-submit-button",
+                            "update db",
+                            id=WRITE_TO_DB_BUTTON,
                             n_clicks=0,
                         ),
                     ],
@@ -246,7 +250,7 @@ app.layout = html.Div(
                                 ),
                                 html.Button(
                                     "Update DB with remaining API calls",
-                                    id=UPDATE_DB_BUTTON,
+                                    id=WRITE_TO_DB_BUTTON,
                                 ),
                             ],
                             style={"display": "flex", "align-items": "center"},
@@ -308,7 +312,7 @@ def search_marked_symbols(n_clicks, search_term: str):
         return dash.no_update
 
     # this could be replaced by having the db as a fast api endpoint running in the background
-    with alpha_vantage_db() as db:
+    with get_db_session_context(AV_SEARCH_DB) as db:
         search_results = [
             MarketMetaData(**result) for result in get_search_results(db, search_term)
         ]
@@ -318,7 +322,7 @@ def search_marked_symbols(n_clicks, search_term: str):
         search_results = request_data(
             create_symbol_search_params(search_term), API_KEY, SymbolMarketSearchResults
         ).best_matches
-        with alpha_vantage_db() as db:
+        with get_db_session_context(AV_SEARCH_DB) as db:
             save_search_results(db, search_term, search_results)
         debug_info = "from api"
 
@@ -482,7 +486,36 @@ def update_graph(data):
 # endregion
 
 
-# region: lower display area (info)
+# region: lower left display area (add time to db)
+@app.callback(
+    Output(DEBUG_OUTPUT_TEXT_FIELD, "value", allow_duplicate=True),
+    Input(WRITE_TO_DB_BUTTON, "n_clicks"),
+    State(WRITE_TO_DB_INPUT, "value"),
+    prevent_initial_call=True,
+)
+def add_time_series_to_db(n_clicks, new_input):
+    if not n_clicks:
+        return dash.no_update
+
+    # TODO: add
+
+    return f"New input: {new_input}"
+
+
+# TODO: Method which activates/deactivates the database input field based on the selected asset type
+# e.g. done automatically for forex and crypto, ISIN required for stocks
+# @app.callback(
+#     Output(WRITE_TO_DB_INPUT, "value", allow_duplicate=True),
+#     Input(SEARCH_BUTTON, "n_clicks"),
+#     prevent_initial_call=True,
+# )
+# def preset_write_to_db_input(value):
+#     return value
+
+# TODO: Change update_db button state based on available data in the time data store
+
+
+# region: lower right display area (info)
 @app.callback(
     Output(OUTPUT_REMAINING_API_CALLS, "children"),
     Input(API_COUNT_STORE, "data"),
@@ -493,7 +526,7 @@ def update_remaining_calls(api_data):
 
 @app.callback(
     Output(DEBUG_OUTPUT_TEXT_FIELD, "value", allow_duplicate=True),
-    Input(UPDATE_DB_BUTTON, "n_clicks"),
+    Input(WRITE_TO_DB_BUTTON, "n_clicks"),
     prevent_initial_call=True,
 )
 def use_remaining_to_update_db():
