@@ -1,6 +1,17 @@
 archiv/
 alpha_vantage_examples/
 
+# alembic
+alembic.ini
+migrations/*
+alembic/versions/*
+
+# database
+*.db
+*.sqlite
+
+*.lock
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
