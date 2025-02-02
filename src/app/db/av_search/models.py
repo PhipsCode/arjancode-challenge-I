@@ -6,6 +6,7 @@ from sqlalchemy import (
     Table,
 )
 from sqlalchemy.orm import relationship
+
 from ..base import Base
 
 
@@ -36,7 +37,7 @@ class SearchResultEntity(Base):
     )
 
 
-# Zwischentabelle für die Many-to-Many-Beziehung
+# Many to many association table
 search_entry_result_association = Table(
     "search_entry_result_association",
     Base.metadata,
